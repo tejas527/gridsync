@@ -1,0 +1,11 @@
+boot up before killing the old ones (Zero Downtime)
+        time.sleep(2) 
+        
+        print("   [ACTION] Draining Workloads from Virginia-Dirty...")
+        scale_pods(DIRTY_REGION, 0)
+        
+        print("\n✅ MIGRATION COMPLETE: Workloads are now running on 100% clean energy.")
+    else:
+        print("   [INFO] Workloads are already optimized in the Green region.")
+else:
+    print("   [INFO] Current region is optimal. No migration needed.")
