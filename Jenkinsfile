@@ -16,16 +16,17 @@ pipeline {
         }
 
 	
-stage('Test') {
-    steps {
-        echo '🧪 Running Pytest unit + integration tests...'
-        sh '''
-            sudo apt install python3-pip -y -q
-            python3 -m pip install pytest --quiet --break-system-packages
-            python3 -m pytest test_scheduler.py -v
-        '''
-    }
-}       stage('Build Docker Image') {
+	stage('Test') {
+    		steps {
+        		echo '🧪 Running Pytest unit + integration tests...'
+        		sh '''
+            		sudo apt install python3-pip -y -q
+            		python3 -m pip install pytest --quiet --break-system-packages
+            		python3 -m pytest test_scheduler.py -v
+        		'''
+   		 }
+	}      
+	 stage('Build Docker Image') {
             steps {
                 echo '🐳 Building Docker image...'
                 sh "docker build -t ${IMAGE_NAME} ."
