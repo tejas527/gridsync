@@ -1,0 +1,30 @@
+groups:
+  - name: gridsync-alerts
+    rules:
+
+      - alert: PodCrashLooping
+        expr: kube_pod_container_status_restarts_total > 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod is crash looping"
+          description: "A pod has restarted more than 3 times in 2 minutes."
+
+      - alert: HighCarbonRegionStillActive
+        expr: kube_deployment_spec_replicas{namespace="virginia-dirty"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workloads still running in dirty region"
+          description: "virginia-dirty has active pods for over 5 minutes — scheduler may not have run."
+
+      - alert: GreenRegionDown
+        expr: kube_deployment_spec_replicas{namespace="sweden-green"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Green region has no active pods"
+          description: "sweden-green has been at 0 replicas for 10 minutes."

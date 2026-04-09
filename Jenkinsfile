@@ -31,6 +31,16 @@ pipeline {
                 sh "docker build -t ${IMAGE_NAME} ."
             }
         }
+	
+	stage('Scan Docker Image') {
+    		steps {
+        		echo '🔍 Scanning image for vulnerabilities...'
+        		sh '''
+            		which trivy || (curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin)
+            		trivy image --exit-code 0 --severity HIGH,CRITICAL ${IMAGE_NAME}
+        		'''
+    		}
+	}
 
         stage('Apply K8s Manifests') {
             steps {
