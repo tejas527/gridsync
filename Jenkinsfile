@@ -20,7 +20,7 @@ pipeline {
     		steps {
         		echo '🧪 Running Pytest unit + integration tests...'
         		sh '''
-                     		python3 -m pip install pytest --quiet --break-system-packages
+                     		python3 -m pip install pytest --quiet 
             			python3 -m pytest test_scheduler.py -v
         		'''
    		 }
