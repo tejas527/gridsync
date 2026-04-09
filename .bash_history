@@ -99,3 +99,47 @@ python3 scheduler.py
 sudo k3s kubectl get deployments -n sweden-green
 sudo k3s kubectl get deployments -n virginia-dirty
 sudo k3s kubectl get deployments -n sweden-green
+ls
+cat dumm-app.yaml
+cat dummy-app.yaml
+sudo k3s kubectl get svc -n sweden-green
+nano scheduler.py
+nano setup-server.yml
+ls
+test_scheduler.py
+cat test_scheduler.py
+ls
+nano Dockerfile
+nano Jenkinsfile
+cd /home/ubuntu/gridsync && git add . && git commit -m "add Jenkinsfile"
+git init
+git add .
+git commit -m "added all initial files"
+git branch -M main
+git remote add origin https://github.com/tejas527/gridsync.git
+git push -u origin main
+ls
+sudo systemctl start jenkins
+sudi systemctl enable jenkins
+sudo systemctl enable jenkins
+sudo nano /var/lib/jenkins/config.xml
+sudo systemctl restart jenkins
+nano Jenkinsfile
+nano alert-rules.yaml
+git add alert-rules.yaml Jenkinsfile
+git commit -m "add Trivy scan stage and GridSync alert rules"
+git push
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+sudo apt-get clean
+sudo apt-get autoremove -y
+sudo docker system prune -af
+sudo journalctl --vacuum-size=50M
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+sudo k3s kubectl create namespace monitoring
+helm install monitoring prometheus-community/kube-prometheus-stack   --namespace monitoring   --set grafana.adminPassword=gridsync123   --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false   --kubeconfig /etc/rancher/k3s/k3s.yaml
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown ubuntu:ubuntu ~/.kube/config
+helm install monitoring prometheus-community/kube-prometheus-stack   --namespace monitoring   --set grafana.adminPassword=gridsync123   --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
