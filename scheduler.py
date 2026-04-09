@@ -14,7 +14,7 @@ def get_mock_carbon_intensity(region):
         return random.randint(10, 50)
 
 def scale_pods(namespace, replicas):
-    command = f"sudo k3s kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
+    command = f"k3s kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
     try:
         subprocess.run(command, shell=True, check=True, stdout=subprocess.DEVNULL)
         print(f"   [K8S] Successfully scaled {namespace} to {replicas} pods.")
@@ -22,7 +22,7 @@ def scale_pods(namespace, replicas):
         print(f"   [ERROR] Failed to scale {namespace}: {e}")
 
 def get_current_pods(namespace):
-    command = f"sudo k3s kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
+    command = f"k3s kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         return int(result.stdout.strip())
