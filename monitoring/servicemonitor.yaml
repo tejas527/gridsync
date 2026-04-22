@@ -1,0 +1,39 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gridsync-carbon-exporter
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  jobLabel: gridsync-exporter
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app: gridsync-exporter
+
+---
+# Kubernetes Service wrapping the docker-hosted exporter.
+# The exporter runs via docker compose on host network (:8000).
+# This ExternalName service lets Prometheus discover it via ServiceMonitor.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gridsync-exporter-svc
+  namespace: default
+  labels:
+    app: gridsync-exporter
+spec:
+  type: ExternalName
+  externalName: localhost
+  ports:
+    - name: metrics
+      port: 8000
+      targetPort: 8000

@@ -1,0 +1,16 @@
+apiVersion: v2
+name: gridsync-payload
+description: |
+  GridSync dummy workload — a lightweight nginx deployment used to simulate
+  carbon-aware pod migration across K3s namespaces. Deployed per-namespace
+  (virginia-dirty, ireland-mixed, sweden-green) with replica counts controlled
+  by the carbon scheduler at runtime.
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - gridsync
+  - carbon-aware
+  - devops-portfolio
+maintainers:
+  - name: gridsync-team

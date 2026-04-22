@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gridsync-payload
+  labels:
+    app: {{ .Values.appLabel }}
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.appLabel }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appLabel }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: web-server
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.targetPort }}
+        resources:
+          requests:
+            memory: {{ .Values.resources.requests.memory }}
+            cpu: {{ .Values.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.resources.limits.memory }}
+            cpu: {{ .Values.resources.limits.cpu }}

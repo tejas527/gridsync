@@ -1,0 +1,190 @@
+# monitoring/prometheus-values.yaml
+# Helm values for kube-prometheus-stack, tuned for t3.small (2 vCPU / 2 GB RAM).
+# Install with:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f monitoring/prometheus-values.yaml
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    # Scrape the carbon-exporter running on host network port 8000
+    additionalScrapeConfigs:
+      - job_name: gridsync-carbon-exporter
+        scrape_interval: 15s
+        static_configs:
+          - targets:
+              - localhost:8000
+        relabel_configs:
+          - target_label: job
+            replacement: gridsync-exporter
+
+    # Pick up PrometheusRule and ServiceMonitor from any namespace
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+
+    # t3.small memory limit — keeps Prometheus alive alongside K3s + Jenkins
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "300m"
+
+    # Retention — 7 days is enough for a portfolio demo
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+# ── AlertManager ──────────────────────────────────────────────────────────────
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+      # Replace with your actual Slack webhook URL
+      slack_api_url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: slack-gridsync
+
+      routes:
+        - match:
+            severity: critical
+          receiver: slack-gridsync
+          continue: true
+        - match:
+            severity: warning
+          receiver: slack-gridsync
+
+    receivers:
+      - name: slack-gridsync
+        slack_configs:
+          - channel: "#gridsync-alerts"
+            send_resolved: true
+            username: "GridSync AlertManager"
+            icon_emoji: ":leaf:"
+            title: |-
+              [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+            text: |-
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Namespace:* {{ .Labels.namespace }}
+              *Severity:* {{ .Labels.severity }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+
+  alertmanagerSpec:
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "20m"
+      limits:
+        memory: "128Mi"
+        cpu: "50m"
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+  adminPassword: "gridsync-admin"   # Change before real use
+
+  service:
+    type: NodePort
+    nodePort: 30030
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "100m"
+
+  # Auto-provision the GridSync dashboard from a ConfigMap
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+
+  # Embed the dashboard JSON via ConfigMap — applied separately in monitoring/grafana-dashboard.yaml
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: gridsync
+          orgId: 1
+          folder: GridSync
+          type: file
+          disableDeletion: false
+          options:
+            path: /var/lib/grafana/dashboards/gridsync
+
+# ── Disable heavy components not needed for portfolio demo ───────────────────
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: false   # Saves ~50 MB RAM
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+# kube-prometheus-stack installs a LOT of default rules; keep only what matters
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false
+    etcd: false
+    configReloaders: false
+    general: true
+    k8sContainerCpuUsageSecondsTotal: false
+    k8sContainerMemoryCache: false
+    k8sContainerMemoryRss: false
+    k8sContainerMemorySwap: false
+    k8sContainerResource: false
+    k8sPodOwner: false
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeControllerManager: false
+    kubelet: true
+    kubeProxy: false
+    kubePrometheusGeneral: true
+    kubePrometheusNodeRecording: false
+    kubernetesApps: true
+    kubernetesResources: false
+    kubernetesStorage: false
+    kubernetesSystem: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeStateMetrics: true
+    network: false
+    node: false
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
+    prometheus: true
+    prometheusOperator: false

@@ -1,0 +1,14 @@
+# ── GridSync Carbon Exporter Image ───────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Flask not needed — exporter uses stdlib http.server; only PyYAML required
+RUN pip install --no-cache-dir pyyaml
+
+COPY carbon_exporter.py .
+COPY regions.yaml .
+
+EXPOSE 8000
+
+CMD ["python", "carbon_exporter.py"]

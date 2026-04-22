@@ -1,0 +1,50 @@
+version: "3.9"
+
+# ── GridSync Multi-Container Stack ────────────────────────────────────────────
+# Two services:
+#   carbon-exporter  — long-running; exposes Prometheus metrics on :8000
+#   scheduler        — short-lived; runs once, migrates workloads, then exits
+
+services:
+
+  # ── Service 1: Prometheus Metrics Exporter ─────────────────────────────────
+  # Continuously samples all regions from regions.yaml and exposes /metrics.
+  # Prometheus scrapes this; Grafana visualises it.
+  carbon-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile.exporter
+    container_name: gridsync-exporter
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./regions.yaml:/app/regions.yaml:ro
+    environment:
+      SCRAPE_INTERVAL: "15"
+      EXPORTER_PORT: "8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Service 2: Carbon-Aware Scheduler ──────────────────────────────────────
+  # Runs once per pipeline execution. Reads regions.yaml, picks the greenest
+  # namespace, and issues kubectl commands to migrate the workload there.
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gridsync-scheduler
+    network_mode: host          # Required to reach the K3s API server
+    volumes:
+      - /usr/local/bin/k3s:/usr/local/bin/k3s:ro
+      - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
+      - ./regions.yaml:/app/regions.yaml:ro
+    environment:
+      REGIONS_FILE: "/app/regions.yaml"
+    depends_on:
+      carbon-exporter:
+        condition: service_healthy
+    restart: "no"               # One-shot; Jenkins reruns it each pipeline cycle

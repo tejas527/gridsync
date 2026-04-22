@@ -1,0 +1,19 @@
+[bandit]
+# Files/directories to scan
+targets = scheduler.py,carbon_exporter.py
+
+# Tests to skip (low-value for this project)
+# B101 = assert used (fine in production code)
+# B603 = subprocess without shell (we intentionally use shell=True for k3s)
+# B604 = subprocess with shell=True (documented trade-off: k3s CLI requires it)
+# B607 = start_process_with_partial_path (we use full sudo path)
+skips = B101,B603,B604,B607
+
+# Severity threshold — fail on MEDIUM and above
+level = MEDIUM
+
+# Confidence threshold
+confidence = MEDIUM
+
+# Output format (also produces JSON via -f json in CI)
+output_format = text

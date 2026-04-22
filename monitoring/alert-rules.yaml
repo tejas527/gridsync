@@ -1,0 +1,69 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: gridsync-carbon-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring      # Must match the Helm release name for Prometheus to pick it up
+spec:
+  groups:
+  - name: gridsync.carbon.rules
+    interval: 30s
+    rules:
+
+    # ── Firing alert: workloads are in a high-carbon region ───────────────────
+    - alert: DirtyRegionActive
+      expr: |
+        gridsync_active_region{region="virginia-dirty"} == 1
+        and gridsync_carbon_intensity_gco2_kwh{region="virginia-dirty"} > 250
+      for: 1m
+      labels:
+        severity: warning
+        team: gridsync
+      annotations:
+        summary: "Workloads running in high-carbon region"
+        description: |
+          The gridsync-payload workload is currently active in {{ $labels.zone }} 
+          which has a carbon intensity of {{ $value }} gCO2/kWh (threshold: 250).
+          The scheduler should migrate workloads to a greener region.
+
+    # ── Firing alert: carbon intensity very high (>400) anywhere active ────────
+    - alert: CarbonIntensityCritical
+      expr: |
+        gridsync_carbon_intensity_gco2_kwh * gridsync_active_region > 400
+      for: 2m
+      labels:
+        severity: critical
+        team: gridsync
+      annotations:
+        summary: "Critical carbon intensity in active region"
+        description: |
+          Active region {{ $labels.zone }} has a carbon intensity of {{ $value }} gCO2/kWh.
+          This exceeds the critical threshold of 400 gCO2/kWh. Immediate migration required.
+
+    # ── Info alert: successful migration detected ──────────────────────────────
+    - alert: GridSyncMigrationOccurred
+      expr: |
+        increase(gridsync_migration_total[10m]) > 0
+      labels:
+        severity: info
+        team: gridsync
+      annotations:
+        summary: "GridSync: workload migration completed"
+        description: |
+          The carbon scheduler has triggered a workload migration in the last 10 minutes.
+          Current migration count: {{ $value }}.
+
+    # ── Firing alert: exporter is down (no metrics for 2 mins) ────────────────
+    - alert: GridSyncExporterDown
+      expr: |
+        absent(gridsync_carbon_intensity_gco2_kwh) == 1
+      for: 2m
+      labels:
+        severity: critical
+        team: gridsync
+      annotations:
+        summary: "GridSync carbon-exporter is not responding"
+        description: |
+          No gridsync_carbon_intensity_gco2_kwh metrics have been received for 2 minutes.
+          The carbon-exporter container may be down. Check: docker compose ps

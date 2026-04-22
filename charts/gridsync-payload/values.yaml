@@ -1,0 +1,24 @@
+replicaCount: 0
+
+image:
+  repository: nginx
+  tag: alpine
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "50m"
+  limits:
+    memory: "128Mi"
+    cpu: "100m"
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 80
+
+appLabel: gridsync-web
+
+metrics:
+  enabled: false

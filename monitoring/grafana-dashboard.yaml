@@ -1,0 +1,214 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gridsync-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  gridsync-carbon.json: |
+    {
+      "uid": "gridsync-carbon-v1",
+      "title": "GridSync — Carbon Monitor",
+      "description": "Real-time carbon intensity and workload placement across all configured regions",
+      "timezone": "browser",
+      "schemaVersion": 36,
+      "version": 1,
+      "refresh": "15s",
+      "tags": ["gridsync", "carbon", "kubernetes"],
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Active Region",
+          "description": "Region currently hosting the workload (lowest carbon)",
+          "gridPos": { "x": 0, "y": 0, "w": 8, "h": 4 },
+          "targets": [
+            {
+              "expr": "label_replace(gridsync_active_region == 1, \"__name__\", \"\", \"\", \"\")",
+              "legendFormat": "{{zone}}",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                { "type": "value", "options": { "1": { "text": "ACTIVE", "color": "green" } } }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": 1 }]
+              },
+              "color": { "mode": "thresholds" }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value_and_name", "colorMode": "background" }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Total Migrations",
+          "description": "Number of workload migrations triggered since exporter start",
+          "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+          "targets": [
+            {
+              "expr": "gridsync_migration_total",
+              "legendFormat": "Migrations",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "fixed", "fixedColor": "blue" },
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value_and_name", "colorMode": "background" }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Carbon Savings",
+          "description": "gCO2/kWh saved by running in the greenest region vs the dirtiest",
+          "gridPos": { "x": 16, "y": 0, "w": 8, "h": 4 },
+          "targets": [
+            {
+              "expr": "max(gridsync_carbon_intensity_gco2_kwh) - sum(gridsync_carbon_intensity_gco2_kwh * gridsync_active_region)",
+              "legendFormat": "Saved gCO2/kWh",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "suffix": " gCO2",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": 0 },
+                  { "color": "yellow", "value": 100 },
+                  { "color": "green", "value": 250 }
+                ]
+              }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "value_and_name", "colorMode": "background" }
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Carbon Intensity — All Regions",
+          "description": "gCO2eq/kWh over time. Lower = cleaner energy. Scheduler migrates to the lowest line.",
+          "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+          "targets": [
+            {
+              "expr": "gridsync_carbon_intensity_gco2_kwh",
+              "legendFormat": "{{zone}}",
+              "interval": "15s"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": { "lineWidth": 2, "fillOpacity": 15, "gradientMode": "none" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "yellow", "value": 100 },
+                  { "color": "red", "value": 300 }
+                ]
+              }
+            },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "Virginia (US-East)" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+              { "matcher": { "id": "byName", "options": "Ireland (EU-West)" },  "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+              { "matcher": { "id": "byName", "options": "Sweden (EU-North)" },  "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+            ]
+          },
+          "options": {
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "min", "max", "mean"] },
+            "tooltip": { "mode": "multi" }
+          }
+        },
+        {
+          "id": 5,
+          "type": "bargauge",
+          "title": "Current Carbon Intensity — Per Region",
+          "description": "Horizontal bar gauge. Shortest bar = workload destination.",
+          "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "gridsync_carbon_intensity_gco2_kwh",
+              "legendFormat": "{{zone}}",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "max": 550,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "yellow", "value": 100 },
+                  { "color": "orange", "value": 200 },
+                  { "color": "red", "value": 300 }
+                ]
+              },
+              "color": { "mode": "thresholds" }
+            }
+          },
+          "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "displayMode": "gradient", "showUnfilled": true }
+        },
+        {
+          "id": 6,
+          "type": "table",
+          "title": "Region Status Table",
+          "description": "Current readings for all regions — 1 = active (workload is here)",
+          "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "gridsync_carbon_intensity_gco2_kwh",
+              "legendFormat": "{{zone}}",
+              "instant": true,
+              "refId": "A"
+            },
+            {
+              "expr": "gridsync_active_region",
+              "legendFormat": "{{zone}}",
+              "instant": true,
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "short" },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Value #B" },
+                "properties": [
+                  { "id": "displayName", "value": "Active" },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      { "type": "value", "options": { "0": { "text": "—", "color": "text" }, "1": { "text": "✓ ACTIVE", "color": "green" } } }
+                    ]
+                  },
+                  { "id": "custom.displayMode", "value": "color-text" }
+                ]
+              }
+            ]
+          },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value #A", "desc": false }] },
+          "transformations": [
+            { "id": "merge", "options": {} },
+            { "id": "organize", "options": { "renameByName": { "Value #A": "gCO2/kWh", "Value #B": "Active" } } }
+          ]
+        }
+      ]
+    }

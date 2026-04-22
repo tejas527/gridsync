@@ -1,0 +1,23 @@
+# GridSync Region Configuration
+# Add or remove regions here — no code changes needed.
+# carbon_profile controls the mock intensity range:
+#   high   → 300–500 gCO2/kWh  (coal/gas heavy)
+#   medium → 100–250 gCO2/kWh  (mixed grid)
+#   low    → 10–50  gCO2/kWh   (wind/hydro/nuclear)
+ 
+regions:
+  - name: virginia-dirty
+    display: "Virginia (US-East)"
+    namespace: virginia-dirty
+    carbon_profile: high
+ 
+  - name: ireland-mixed
+    display: "Ireland (EU-West)"
+    namespace: ireland-mixed
+    carbon_profile: medium
+ 
+  - name: sweden-green
+    display: "Sweden (EU-North)"
+    namespace: sweden-green
+    carbon_profile: low
+ 

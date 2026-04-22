@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gridsync-payload
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: gridsync-web
+  template:
+    metadata:
+      labels:
+        app: gridsync-web
+    spec:
+      containers:
+      - name: web-server
+        image: nginx:alpine
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gridsync-payload-svc
+spec:
+  selector:
+    app: gridsync-web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: NodePort
