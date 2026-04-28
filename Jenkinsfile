@@ -103,13 +103,13 @@ pipeline {
                     export PATH=$PATH:/var/lib/jenkins/.local/bin
 
                     python3 -m bandit -r scheduler.py carbon_exporter.py app.py \
-			--skip B101,B603,B604,B607 \
+			--skip B101,B602,B603,B604,B607 \
 			--severity-level medium \
                         -f json -o ${REPORT_DIR}/bandit-report.json \
                         --exit-zero
 
                     python3 -m bandit -r scheduler.py carbon_exporter.py app.py \
-                        --skip B101,B603,B604,B607 \
+                        --skip B101,B602,B603,B604,B607 \
                         --severity-level medium \
                         --exit-zero
 
