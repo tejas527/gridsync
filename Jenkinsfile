@@ -40,16 +40,16 @@ pipeline {
             steps {
                 echo ':building_construction:  Terraform: validating infrastructure...'
                 sh '''
-                    # Install only if missing
-                    if ! command -v terraform &>/dev/null; then
+                    if ! terraform version &>/dev/null 2>&1; then
+                        echo "Installing Terraform..."
                         curl -fsSL https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip \
                             -o /tmp/tf.zip
                         sudo unzip -o /tmp/tf.zip -d /usr/local/bin/
                         sudo chmod +x /usr/local/bin/terraform
                         rm /tmp/tf.zip
+                    else
+                        echo "Terraform already installed: $(terraform version | head -1)"
                     fi
-
-                    terraform version
 
                     terraform init -input=false
                     terraform validate
@@ -57,7 +57,7 @@ pipeline {
 
                     terraform plan -input=false -no-color \
                         2>&1 | tee ${REPORT_DIR}/terraform-plan.txt || \
-                        echo "[INFO] Plan needs AWS credentials — validate passed, infra-as-code demonstrated."
+                        echo "[INFO] Plan needs AWS credentials — validate passed."
 
                     echo "Terraform stage complete."
                 '''
