@@ -73,8 +73,8 @@ def get_current_pods(namespace):
 
 def ensure_namespace(namespace):
     """Creates a K8s namespace if it doesn't already exist."""
-    check = f"sudo k3s kubectl get namespace {namespace}"
-    create = f"sudo k3s kubectl create namespace {namespace}"
+    check = f"k3s kubectl get namespace {namespace}"
+    create = f"k3s kubectl create namespace {namespace}"
     result = subprocess.run(check, shell=True, capture_output=True)
     if result.returncode != 0:
         subprocess.run(create, shell=True, check=True)
