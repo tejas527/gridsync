@@ -148,7 +148,10 @@ print(len(highs))
         stage('Trivy — Scan + SBOM') {
             steps {
                 echo 'Trivy: scanning all images...'
-                sh '''
+		sh '''
+                    TRIVY_CACHE="/tmp/trivy-cache-${BUILD_NUMBER}"
+                    mkdir -p "$TRIVY_CACHE"
+
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
                         SAFE=$(echo $IMAGE | tr "-" "_")
                         echo "Scanning $IMAGE..."
@@ -156,20 +159,23 @@ print(len(highs))
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
                             --format table \
+                            --cache-dir "$TRIVY_CACHE" \
                             ${IMAGE}:latest
 
                         trivy image \
                             --format json \
                             --output ${REPORT_DIR}/trivy-${SAFE}.json \
+                            --cache-dir "$TRIVY_CACHE" \
                             ${IMAGE}:latest
 
                         trivy image \
                             --format spdx-json \
                             --output ${REPORT_DIR}/sbom-${SAFE}.spdx.json \
+                            --cache-dir "$TRIVY_CACHE" \
                             ${IMAGE}:latest
                     done
                     echo "Trivy: all images scanned."
-                '''
+                '''                
             }
             post {
                 always {
