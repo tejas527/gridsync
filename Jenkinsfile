@@ -183,31 +183,30 @@ print(len(highs))
             steps {
                 echo 'Helm: deploying to all region namespaces...'
                 sh '''
+                    mkdir -p /var/lib/jenkins/.kube
+                    sudo cp /etc/rancher/k3s/k3s.yaml /var/lib/jenkins/.kube/config
+                    sudo chown jenkins:jenkins /var/lib/jenkins/.kube/config
+                    export KUBECONFIG=/var/lib/jenkins/.kube/config
+
                     for NS in virginia-dirty ireland-mixed sweden-green; do
                         sudo k3s kubectl get namespace $NS \
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
                     helm upgrade --install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
-                        --kubeconfig /etc/rancher/k3s/k3s.yaml \
                         -n virginia-dirty \
                         --set replicaCount=3 \
                         --wait --timeout 2m
 
-                    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
                     helm upgrade --install gridsync-irelandmixed \
                         ./charts/gridsync-payload \
-                        --kubeconfig /etc/rancher/k3s/k3s.yaml \
                         -n ireland-mixed \
                         --set replicaCount=0 \
                         --wait --timeout 2m
 
-                    KUBECONFIG=/etc/rancher/k3s/k3s.yaml \
                     helm upgrade --install gridsync-swedengreen \
                         ./charts/gridsync-payload \
-                        --kubeconfig /etc/rancher/k3s/k3s.yaml \
                         -n sweden-green \
                         --set replicaCount=0 \
                         --wait --timeout 2m
