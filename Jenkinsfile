@@ -188,9 +188,12 @@ print(len(highs))
                     sudo chown jenkins:jenkins /var/lib/jenkins/.kube/config
                     export KUBECONFIG=/var/lib/jenkins/.kube/config
 
+                    # Clean up any kubectl-created resources that Helm can't take over
                     for NS in virginia-dirty ireland-mixed sweden-green; do
-                        sudo k3s kubectl get namespace $NS \
-                            || sudo k3s kubectl create namespace $NS
+                        sudo k3s kubectl delete deployment gridsync-payload \
+                            -n $NS --ignore-not-found 2>/dev/null || true
+                        sudo k3s kubectl delete service gridsync-payload-svc \
+                            -n $NS --ignore-not-found 2>/dev/null || true
                     done
 
                     helm upgrade --install gridsync-virginiadirty \
