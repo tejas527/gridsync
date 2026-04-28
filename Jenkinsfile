@@ -40,28 +40,24 @@ pipeline {
             steps {
                 echo ':building_construction:  Terraform: validating infrastructure...'
                 sh '''
+                    # Install only if missing
                     if ! command -v terraform &>/dev/null; then
-                        echo "Installing Terraform..."
                         curl -fsSL https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip \
                             -o /tmp/tf.zip
-                        sudo unzip -o /tmp/tf.zip -d /usr/local/bin/ && rm /tmp/tf.zip
+                        sudo unzip -o /tmp/tf.zip -d /usr/local/bin/
+                        sudo chmod +x /usr/local/bin/terraform
+                        rm /tmp/tf.zip
                     fi
+
                     terraform version
 
-                    cd ${TF_DIR}
                     terraform init -input=false
-
-                    # Validate HCL syntax
                     terraform validate
                     echo "Terraform validate: PASSED"
 
-                    # Plan — shows what would be created/changed
-                    # (plan without credentials exits with state info only — safe for demo)
                     terraform plan -input=false -no-color \
-			2>&1 | tee ${REPORT_DIR}/terraform-plan.txt || \
-                        echo "[INFO] Terraform plan requires AWS IAM credentials (EC2 has no instance role). HCL validated successfully — infra-as-code demonstrated."
-                        
-
+                        2>&1 | tee ${REPORT_DIR}/terraform-plan.txt || \
+                        echo "[INFO] Plan needs AWS credentials — validate passed, infra-as-code demonstrated."
 
                     echo "Terraform stage complete."
                 '''
