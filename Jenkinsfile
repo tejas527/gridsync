@@ -200,20 +200,17 @@ print(len(highs))
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    # Uninstall any broken Helm releases from previous runs
-                    helm uninstall gridsync-virginiadirty -n virginia-dirty 2>/dev/null || true
-                    helm uninstall gridsync-irelandmixed  -n ireland-mixed  2>/dev/null || true
-                    helm uninstall gridsync-swedengreen   -n sweden-green   2>/dev/null || true
-
-                    # Clean up any leftover k8s resources
+                    # Delete Helm release history secrets so installs are always fresh
                     for NS in virginia-dirty ireland-mixed sweden-green; do
+                        sudo k3s kubectl delete secret -n $NS \
+                            -l "owner=helm" \
+                            --ignore-not-found 2>/dev/null || true
                         sudo k3s kubectl delete deployment gridsync-payload \
                             -n $NS --ignore-not-found 2>/dev/null || true
                         sudo k3s kubectl delete service gridsync-payload-svc \
                             -n $NS --ignore-not-found 2>/dev/null || true
                     done
 
-                    # Fresh install
                     helm install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
