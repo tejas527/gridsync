@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ── GridSync Multi-Container Stack ────────────────────────────────────────────
 # Two services:
 #   carbon-exporter  — long-running; exposes Prometheus metrics on :8000
