@@ -84,11 +84,11 @@ def test_migration_to_greenest_region(mock_carbon, mock_scale, mock_pods, mock_e
 
 
 @patch("scheduler.load_regions", return_value=MOCK_REGIONS["regions"])
-@patch("scheduler.get_current_pods", return_value=3)   # already 3 pods in greenest region
+@patch("scheduler.get_current_pods", side_effect=lambda ns: 3 if ns == "sweden-green" else 0)
 @patch("scheduler.scale_pods")
 @patch("scheduler.get_mock_carbon_intensity", side_effect=lambda r: {"virginia-dirty": 450, "ireland-mixed": 160, "sweden-green": 25}[r])
 def test_no_action_when_already_optimal(mock_carbon, mock_scale, mock_pods, mock_regions):
-    """When the greenest region already has pods, no migration should occur."""
+    """When the greenest region already has pods and others are drained, no migration occurs."""
     result = run_scheduler()
     assert result == "no_action"
     mock_scale.assert_not_called()
