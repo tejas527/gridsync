@@ -106,12 +106,14 @@ pipeline {
                     export PATH=$PATH:/var/lib/jenkins/.local/bin
 
                     python3 -m bandit -r scheduler.py carbon_exporter.py app.py \
-                        --configfile security/.bandit \
+			--skip B101,B603,B604,B607 \
+			--level MEDIUM \
                         -f json -o ${REPORT_DIR}/bandit-report.json \
                         --exit-zero
 
                     python3 -m bandit -r scheduler.py carbon_exporter.py app.py \
-                        --configfile security/.bandit \
+                        --skip B101,B603,B604,B607 \
+                        --level MEDIUM \
                         --exit-zero
 
                     HIGH=$(python3 -c "
