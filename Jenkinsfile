@@ -192,9 +192,20 @@ print(len(highs))
                     mkdir -p /var/lib/jenkins/.kube
                     sudo cp /etc/rancher/k3s/k3s.yaml /var/lib/jenkins/.kube/config
                     sudo chown jenkins:jenkins /var/lib/jenkins/.kube/config
+                    chmod 600 /var/lib/jenkins/.kube/config
                     export KUBECONFIG=/var/lib/jenkins/.kube/config
 
-                    # Clean up any kubectl-created resources that Helm can't take over
+                    for NS in virginia-dirty ireland-mixed sweden-green; do
+                        sudo k3s kubectl get namespace $NS \
+                            || sudo k3s kubectl create namespace $NS
+                    done
+
+                    # Uninstall any broken Helm releases from previous runs
+                    helm uninstall gridsync-virginiadirty -n virginia-dirty 2>/dev/null || true
+                    helm uninstall gridsync-irelandmixed  -n ireland-mixed  2>/dev/null || true
+                    helm uninstall gridsync-swedengreen   -n sweden-green   2>/dev/null || true
+
+                    # Clean up any leftover k8s resources
                     for NS in virginia-dirty ireland-mixed sweden-green; do
                         sudo k3s kubectl delete deployment gridsync-payload \
                             -n $NS --ignore-not-found 2>/dev/null || true
@@ -202,19 +213,20 @@ print(len(highs))
                             -n $NS --ignore-not-found 2>/dev/null || true
                     done
 
-                    helm upgrade --install gridsync-virginiadirty \
+                    # Fresh install
+                    helm install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
                         --wait --timeout 2m
 
-                    helm upgrade --install gridsync-irelandmixed \
+                    helm install gridsync-irelandmixed \
                         ./charts/gridsync-payload \
                         -n ireland-mixed \
                         --set replicaCount=0 \
                         --wait --timeout 2m
 
-                    helm upgrade --install gridsync-swedengreen \
+                    helm install gridsync-swedengreen \
                         ./charts/gridsync-payload \
                         -n sweden-green \
                         --set replicaCount=0 \
