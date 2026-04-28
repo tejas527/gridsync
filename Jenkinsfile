@@ -58,9 +58,10 @@ pipeline {
                     # Plan — shows what would be created/changed
                     # (plan without credentials exits with state info only — safe for demo)
                     terraform plan -input=false -no-color \
-                        -out=${REPORT_DIR}/tfplan 2>&1 \
-                        | tee ${REPORT_DIR}/terraform-plan.txt \
-                        || echo "[INFO] Plan requires AWS credentials — validate still passed."
+			2>&1 | tee ${REPORT_DIR}/terraform-plan.txt || \
+                        echo "[INFO] Terraform plan requires AWS IAM credentials (EC2 has no instance role). HCL validated successfully — infra-as-code demonstrated."
+                        
+
 
                     echo "Terraform stage complete."
                 '''
@@ -107,13 +108,13 @@ pipeline {
 
                     python3 -m bandit -r scheduler.py carbon_exporter.py app.py \
 			--skip B101,B603,B604,B607 \
-			--level MEDIUM \
+			--severity-level medium \
                         -f json -o ${REPORT_DIR}/bandit-report.json \
                         --exit-zero
 
                     python3 -m bandit -r scheduler.py carbon_exporter.py app.py \
                         --skip B101,B603,B604,B607 \
-                        --level MEDIUM \
+                        --severity-level medium \
                         --exit-zero
 
                     HIGH=$(python3 -c "
