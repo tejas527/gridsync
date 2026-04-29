@@ -30,21 +30,22 @@ services:
   # ── Service 2: Carbon-Aware Scheduler ──────────────────────────────────────
   # Runs once per pipeline execution. Reads regions.yaml, picks the greenest
   # namespace, and issues kubectl commands to migrate the workload there.
+  # The k3s binary and its kubeconfig are mounted read-only from the host so
+  # the container can talk to the cluster without needing sudo or a separate
+  # kubectl installation.
   scheduler:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: gridsync-scheduler
-    network_mode: host          # Required to reach the K3s API server
+    network_mode: host
     volumes:
-      - /var/lib/jenkins/.kube/config:/app/kubeconfig:ro
       - /usr/local/bin/k3s:/usr/local/bin/k3s:ro
       - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
       - ./regions.yaml:/app/regions.yaml:ro
     environment:
-      - REGIONS_FILE: "/app/regions.yaml"
-      - KUBECONFIG: "/app/kubeconfig"
+      REGIONS_FILE: "/app/regions.yaml"
     depends_on:
       carbon-exporter:
         condition: service_healthy
-    restart: "no"               # One-shot; Jenkins reruns it each pipeline cycle
+    restart: "no"

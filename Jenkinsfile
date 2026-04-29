@@ -212,9 +212,8 @@ print(len(highs))
                     done
 
                     # Render Helm charts and apply with kubectl.
-                    # This uses Helm purely as a template engine — kubectl apply
-                    # is unconditionally idempotent and has no release state, so
-                    # "already exists" errors are impossible regardless of K3s state.
+                    # Uses Helm as a template engine only — kubectl apply is
+                    # unconditionally idempotent, no release state, no "already exists".
                     helm template gridsync-virginiadirty ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
@@ -230,18 +229,29 @@ print(len(highs))
                         --set replicaCount=0 \
                         | sudo k3s kubectl apply -n sweden-green -f -
 
-                    # Give K3s a moment to reconcile after applying manifests
-                    sleep 10
+                    # ── Demo App ──────────────────────────────────────────────
+                    # K3s uses containerd as its container runtime, completely
+                    # separate from the Docker daemon. Images built with
+                    # "docker build" are invisible to K3s pods unless explicitly
+                    # imported into containerd. This one command is what makes
+                    # the demo-app pod actually start and DAST work.
+                    echo "Importing gridsync-demo-app into K3s containerd..."
+                    docker save ${DEMO_APP_IMAGE}:latest \
+                        | sudo k3s ctr images import -
+                    echo "Image imported successfully."
 
-                    # Deploy or update the live demo app and restart to pick up new image
                     sudo k3s kubectl apply -f demo-app.yaml
-		    echo "Forcing deployment update for build ${BUILD_NUMBER}..."
-            	    sudo k3s kubectl patch deployment gridsync-demo-app -n virginia-dirty \
-                    -p "{\\"spec\\": {\\"template\\": {\\"metadata\\": {\\"annotations\\": {\\"ci-build-id\\": \\"${BUILD_NUMBER}\\"}}}}}"
 
-            	    # Wait for completion
+                    # Patch with the build number to force a fresh rollout every run.
+                    # This is more reliable than rollout restart which has a 1-second
+                    # cooldown that causes spurious errors on fast pipelines.
+                    echo "Patching demo-app with build ${BUILD_NUMBER} to trigger rollout..."
+                    sudo k3s kubectl patch deployment gridsync-demo-app \
+                        -n virginia-dirty \
+                        -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"ci-build-id\":\"${BUILD_NUMBER}\"}}}}}"
+
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
-                    -n virginia-dirty --timeout=120s || true
+                        -n virginia-dirty --timeout=120s || true
 
                     echo "Pod state after deploy:"
                     for NS in virginia-dirty ireland-mixed sweden-green; do
