@@ -37,11 +37,13 @@ services:
     container_name: gridsync-scheduler
     network_mode: host          # Required to reach the K3s API server
     volumes:
+      - /var/lib/jenkins/.kube/config:/app/kubeconfig:ro
       - /usr/local/bin/k3s:/usr/local/bin/k3s:ro
       - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
       - ./regions.yaml:/app/regions.yaml:ro
     environment:
-      REGIONS_FILE: "/app/regions.yaml"
+      - REGIONS_FILE: "/app/regions.yaml"
+      - KUBECONFIG=/app/kubeconfig
     depends_on:
       carbon-exporter:
         condition: service_healthy

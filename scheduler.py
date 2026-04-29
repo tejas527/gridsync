@@ -51,7 +51,7 @@ def get_mock_carbon_intensity(region_name_or_profile):
 def scale_pods(namespace, replicas):
     """Executes the Kubernetes command to scale the deployment."""
     # No sudo — container runs as root
-    command = f"k3s kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
+    command = f"kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
     try:
         subprocess.run(command, shell=True, check=True, stdout=subprocess.DEVNULL)
         print(f"   [K8S] Scaled {namespace} → {replicas} pod(s).")
@@ -62,7 +62,7 @@ def scale_pods(namespace, replicas):
 def get_current_pods(namespace):
     """Checks how many pods are currently running in a namespace."""
     # No sudo — container runs as root
-    command = f"k3s kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
+    command = f"kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         return int(result.stdout.strip())
@@ -73,8 +73,8 @@ def get_current_pods(namespace):
 def ensure_namespace(namespace):
     """Creates a K8s namespace if it doesn't already exist."""
     # No sudo — container runs as root
-    check = f"k3s kubectl get namespace {namespace}"
-    create = f"k3s kubectl create namespace {namespace}"
+    check = f"kubectl get namespace {namespace}"
+    create = f"kubectl create namespace {namespace}"
     result = subprocess.run(check, shell=True, capture_output=True)
     if result.returncode != 0:
         subprocess.run(create, shell=True, check=True)
