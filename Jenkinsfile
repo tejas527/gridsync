@@ -155,28 +155,24 @@ print(len(highs))
                     TRIVY_CACHE="/tmp/trivy-cache"
                     mkdir -p "$TRIVY_CACHE"
 
-                    # Self-healing DB check: if the local vulnerability database is
-                    # corrupted (causes a panic), wipe the cache and re-download a
-                    # clean copy before scanning. This prevents a bad DB from ever
-                    # killing the entire pipeline.
-                    echo "Verifying Trivy vulnerability DB integrity..."
-                    if ! trivy image --download-db-only --cache-dir "$TRIVY_CACHE" 2>&1; then
-                        echo "[WARN] Trivy DB download/validation failed — wiping cache and retrying..."
-                        rm -rf "$TRIVY_CACHE"
-                        mkdir -p "$TRIVY_CACHE"
-                        trivy image --download-db-only --cache-dir "$TRIVY_CACHE"
-                    fi
-                    echo "Trivy DB is healthy. Starting image scans..."
+                    # Remove any stale lock files left by a previously interrupted
+                    # Trivy process. Stale locks cause "cache in use" timeouts even
+                    # when no other process is actually running.
+                    find "$TRIVY_CACHE" -name "*.lock" -delete 2>/dev/null || true
 
+                    # Let Trivy manage the DB lifecycle naturally: it checks the
+                    # cache, downloads only if the DB is missing or expired, then
+                    # scans. All three scans run sequentially so there is zero
+                    # concurrent lock contention.
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
                         SAFE=$(echo $IMAGE | tr "-" "_")
                         echo "Scanning $IMAGE..."
+
                         trivy image \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
                             --format table \
                             --cache-dir "$TRIVY_CACHE" \
-                            --skip-db-update \
                             ${IMAGE}:latest
 
                         trivy image \
@@ -190,6 +186,7 @@ print(len(highs))
                             --format spdx-json \
                             --output ${REPORT_DIR}/sbom-${SAFE}.spdx.json \
                             --cache-dir "$TRIVY_CACHE" \
+                            --skip-db-update \
                             ${IMAGE}:latest
                     done
                     echo "Trivy: all images scanned."
