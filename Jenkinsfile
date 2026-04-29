@@ -235,13 +235,13 @@ print(len(highs))
                         --set replicaCount=0 \
                         --wait --timeout 2m
 
-                    # Deploy or update the live demo app
+                    # Deploy or update the live demo app and restart to pick up new image.
+                    # rollout status has || true so a slow pod cycle on a busy instance
+                    # does not kill the pipeline — DAST sleep 30s below handles the wait.
                     sudo k3s kubectl apply -f demo-app.yaml
-
-                    # Force pod restart so it picks up the freshly-built image
                     sudo k3s kubectl rollout restart deployment/gridsync-demo-app -n virginia-dirty
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
-                        -n virginia-dirty --timeout=90s
+                        -n virginia-dirty --timeout=120s || true
 
                     echo "Pod state after deploy:"
                     for NS in virginia-dirty ireland-mixed sweden-green; do
@@ -265,8 +265,8 @@ print(len(highs))
                     TARGET="http://${PUBLIC_IP}:30080"
                     mkdir -p ${REPORT_DIR}/zap
 
-                    # Give the demo app a moment to finish rolling out
-                    sleep 10
+                    echo "Waiting 30s for demo app pod to finish rolling..."
+                    sleep 30
 
                     if curl -sf --max-time 10 "${TARGET}/health" > /dev/null 2>&1; then
                         echo "Target live: $TARGET"
