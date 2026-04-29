@@ -127,10 +127,6 @@ print(len(highs))
             steps {
                 echo 'Building Docker images...'
                 sh '''
-                    # No --no-cache: Docker naturally busts the cache when file content
-                    # changes (COPY layers are re-run when the source file hash changes).
-                    # --no-cache re-downloads pip on every single build, causing CPU/RAM
-                    # pressure that starves the K3s API server during the Helm stage.
                     docker build -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
                                  -t ${SCHEDULER_IMAGE}:latest \
                                  -f Dockerfile .
@@ -156,11 +152,21 @@ print(len(highs))
             steps {
                 echo 'Trivy: scanning all images...'
                 sh '''
-                    # Stable cache path — Trivy reuses the 91 MB vuln DB across builds
-                    # instead of re-downloading it every run (which was happening because
-                    # the old path was keyed to BUILD_NUMBER, creating a new dir each time).
                     TRIVY_CACHE="/tmp/trivy-cache"
                     mkdir -p "$TRIVY_CACHE"
+
+                    # Self-healing DB check: if the local vulnerability database is
+                    # corrupted (causes a panic), wipe the cache and re-download a
+                    # clean copy before scanning. This prevents a bad DB from ever
+                    # killing the entire pipeline.
+                    echo "Verifying Trivy vulnerability DB integrity..."
+                    if ! trivy image --download-db-only --cache-dir "$TRIVY_CACHE" 2>&1; then
+                        echo "[WARN] Trivy DB download/validation failed — wiping cache and retrying..."
+                        rm -rf "$TRIVY_CACHE"
+                        mkdir -p "$TRIVY_CACHE"
+                        trivy image --download-db-only --cache-dir "$TRIVY_CACHE"
+                    fi
+                    echo "Trivy DB is healthy. Starting image scans..."
 
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
                         SAFE=$(echo $IMAGE | tr "-" "_")
@@ -170,12 +176,14 @@ print(len(highs))
                             --severity HIGH,CRITICAL \
                             --format table \
                             --cache-dir "$TRIVY_CACHE" \
+                            --skip-db-update \
                             ${IMAGE}:latest
 
                         trivy image \
                             --format json \
                             --output ${REPORT_DIR}/trivy-${SAFE}.json \
                             --cache-dir "$TRIVY_CACHE" \
+                            --skip-db-update \
                             ${IMAGE}:latest
 
                         trivy image \
@@ -221,15 +229,14 @@ print(len(highs))
                             -n $NS --ignore-not-found 2>/dev/null || true
                     done
 
-                    # virginia-dirty: 3 replicas, wait for pods to be ready (5m timeout)
+                    # virginia-dirty: 3 replicas, wait for pods to be ready
                     helm install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
                         --wait --timeout 5m
 
-                    # ireland-mixed and sweden-green: 0 replicas — no pods to wait for,
-                    # so drop --wait to avoid burning time for nothing.
+                    # 0-replica installs — no pods to wait for, skip --wait
                     helm install gridsync-irelandmixed \
                         ./charts/gridsync-payload \
                         -n ireland-mixed \
@@ -242,9 +249,7 @@ print(len(highs))
                         --set replicaCount=0 \
                         --timeout 5m
 
-                    # Deploy or update the live demo app and restart to pick up new image.
-                    # rollout status has || true so a slow pod cycle on a busy instance
-                    # does not kill the pipeline.
+                    # Deploy or update the live demo app and restart to pick up new image
                     sudo k3s kubectl apply -f demo-app.yaml
                     sudo k3s kubectl rollout restart deployment/gridsync-demo-app -n virginia-dirty
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
