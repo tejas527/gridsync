@@ -127,20 +127,26 @@ print(len(highs))
             steps {
                 echo 'Building Docker images...'
                 sh '''
-                    docker build -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
+                    docker build --no-cache \
+                                 -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
                                  -t ${SCHEDULER_IMAGE}:latest \
                                  -f Dockerfile .
 
-                    docker build -t ${EXPORTER_IMAGE}:${BUILD_NUMBER} \
+                    docker build --no-cache \
+                                 -t ${EXPORTER_IMAGE}:${BUILD_NUMBER} \
                                  -t ${EXPORTER_IMAGE}:latest \
                                  -f Dockerfile.exporter .
 
-                    docker build -t ${DEMO_APP_IMAGE}:${BUILD_NUMBER} \
+                    docker build --no-cache \
+                                 -t ${DEMO_APP_IMAGE}:${BUILD_NUMBER} \
                                  -t ${DEMO_APP_IMAGE}:latest \
                                  -f Dockerfile.app .
 
                     echo "Built images:"
                     docker images | grep gridsync
+
+                    echo "Pruning old dangling images to reclaim disk space..."
+                    docker image prune -f || true
                 '''
             }
         }
@@ -148,7 +154,7 @@ print(len(highs))
         stage('Trivy — Scan + SBOM') {
             steps {
                 echo 'Trivy: scanning all images...'
-		sh '''
+                sh '''
                     TRIVY_CACHE="/tmp/trivy-cache-${BUILD_NUMBER}"
                     mkdir -p "$TRIVY_CACHE"
 
@@ -175,7 +181,7 @@ print(len(highs))
                             ${IMAGE}:latest
                     done
                     echo "Trivy: all images scanned."
-                '''                
+                '''
             }
             post {
                 always {
@@ -229,7 +235,13 @@ print(len(highs))
                         --set replicaCount=0 \
                         --wait --timeout 2m
 
+                    # Deploy or update the live demo app
                     sudo k3s kubectl apply -f demo-app.yaml
+
+                    # Force pod restart so it picks up the freshly-built image
+                    sudo k3s kubectl rollout restart deployment/gridsync-demo-app -n virginia-dirty
+                    sudo k3s kubectl rollout status deployment/gridsync-demo-app \
+                        -n virginia-dirty --timeout=90s
 
                     echo "Pod state after deploy:"
                     for NS in virginia-dirty ireland-mixed sweden-green; do
@@ -253,7 +265,10 @@ print(len(highs))
                     TARGET="http://${PUBLIC_IP}:30080"
                     mkdir -p ${REPORT_DIR}/zap
 
-                    if curl -sf --max-time 5 "${TARGET}/health" > /dev/null 2>&1; then
+                    # Give the demo app a moment to finish rolling out
+                    sleep 10
+
+                    if curl -sf --max-time 10 "${TARGET}/health" > /dev/null 2>&1; then
                         echo "Target live: $TARGET"
                         docker run --rm \
                             --network host \

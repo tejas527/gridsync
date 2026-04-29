@@ -32,12 +32,10 @@ def get_mock_carbon_intensity(region_name_or_profile):
     Accepts either a region name (e.g. 'virginia-dirty') or a profile key (e.g. 'high').
     This keeps backward compatibility with unit tests.
     """
-    # If it's a known profile key, use it directly
     if region_name_or_profile in CARBON_PROFILES:
         low, high = CARBON_PROFILES[region_name_or_profile]
         return random.randint(low, high)
 
-    # Otherwise treat it as a region name and look up its profile
     try:
         regions = load_regions()
         for r in regions:
@@ -47,13 +45,13 @@ def get_mock_carbon_intensity(region_name_or_profile):
     except Exception:
         pass
 
-    # Fallback: return a mid-range value
     return random.randint(100, 300)
 
 
 def scale_pods(namespace, replicas):
     """Executes the Kubernetes command to scale the deployment."""
-    command = f"sudo k3s kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
+    # No sudo — container runs as root
+    command = f"k3s kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
     try:
         subprocess.run(command, shell=True, check=True, stdout=subprocess.DEVNULL)
         print(f"   [K8S] Scaled {namespace} → {replicas} pod(s).")
@@ -63,7 +61,8 @@ def scale_pods(namespace, replicas):
 
 def get_current_pods(namespace):
     """Checks how many pods are currently running in a namespace."""
-    command = f"sudo k3s kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
+    # No sudo — container runs as root
+    command = f"k3s kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         return int(result.stdout.strip())
@@ -73,6 +72,7 @@ def get_current_pods(namespace):
 
 def ensure_namespace(namespace):
     """Creates a K8s namespace if it doesn't already exist."""
+    # No sudo — container runs as root
     check = f"k3s kubectl get namespace {namespace}"
     create = f"k3s kubectl create namespace {namespace}"
     result = subprocess.run(check, shell=True, capture_output=True)
@@ -86,7 +86,6 @@ def run_scheduler():
     print("🌍 GridSync Carbon Scheduler Initializing...")
     print("==================================================")
 
-    # Load regions dynamically from config
     try:
         regions = load_regions()
     except FileNotFoundError:
@@ -96,7 +95,6 @@ def run_scheduler():
             {"name": GREEN_REGION,  "display": "Sweden (EU-North)",  "namespace": GREEN_REGION,  "carbon_profile": "low"},
         ]
 
-    # Sample carbon intensity for every region
     print(f"\n📊 Live Grid Telemetry ({len(regions)} regions):")
     readings = []
     for region in regions:
@@ -105,7 +103,6 @@ def run_scheduler():
         bar = "█" * (intensity // 25)
         print(f"   {region['display']:<28} {intensity:>4} gCO2/kWh  {bar}")
 
-    # Find the greenest region
     best = min(readings, key=lambda r: r["intensity"])
     worst = max(readings, key=lambda r: r["intensity"])
 
@@ -113,11 +110,9 @@ def run_scheduler():
     print(f"   Greenest region  → {best['display']} ({best['intensity']} gCO2/kWh)")
     print(f"   Dirtiest region  → {worst['display']} ({worst['intensity']} gCO2/kWh)")
 
-    # Check if we're already in the optimal region
     current_pods_in_best = get_current_pods(best["namespace"])
 
     if current_pods_in_best > 0:
-        # Already optimal — check if any dirty regions still have pods
         dirty_active = [
             r for r in readings
             if r["namespace"] != best["namespace"] and get_current_pods(r["namespace"]) > 0
@@ -128,16 +123,13 @@ def run_scheduler():
 
     print(f"\n   [ALERT] Triggering migration to {best['display']}...")
 
-    # Scale UP the greenest region first (zero-downtime)
     ensure_namespace(best["namespace"])
     print(f"   [ACTION] Spinning up 3 pods in {best['namespace']}...")
     scale_pods(best["namespace"], 3)
 
-    # Wait for new pods to be ready before killing old ones
     print(f"   [ACTION] Waiting for pods to stabilize...")
     time.sleep(3)
 
-    # Scale DOWN all other regions
     for region in readings:
         if region["namespace"] != best["namespace"]:
             print(f"   [ACTION] Draining {region['namespace']}...")
