@@ -155,13 +155,14 @@ print(len(highs))
                     TRIVY_CACHE="/tmp/trivy-cache"
                     mkdir -p "$TRIVY_CACHE"
 
-                    # Remove any stale lock files left by a previously interrupted process
+                    # Remove stale lock files left by previously interrupted Trivy runs
                     find "$TRIVY_CACHE" -name "*.lock" -delete 2>/dev/null || true
 
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
                         SAFE=$(echo $IMAGE | tr "-" "_")
                         echo "Scanning $IMAGE..."
 
+                        # First call downloads/refreshes the DB if needed
                         trivy image \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
@@ -169,6 +170,7 @@ print(len(highs))
                             --cache-dir "$TRIVY_CACHE" \
                             ${IMAGE}:latest
 
+                        # Subsequent calls reuse the already-fresh DB
                         trivy image \
                             --format json \
                             --output ${REPORT_DIR}/trivy-${SAFE}.json \
@@ -209,39 +211,29 @@ print(len(highs))
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    # Delete Helm release history so installs are always fresh
-                    for NS in virginia-dirty ireland-mixed sweden-green; do
-                        sudo k3s kubectl delete secret -n $NS \
-                            -l "owner=helm" \
-                            --ignore-not-found 2>/dev/null || true
-                        sudo k3s kubectl delete deployment gridsync-payload \
-                            -n $NS --ignore-not-found 2>/dev/null || true
-                        sudo k3s kubectl delete service gridsync-payload-svc \
-                            -n $NS --ignore-not-found 2>/dev/null || true
-                    done
-
-                    # No --wait on any install: the K3s API server is under heavy load
-                    # from upstream stages and returns spurious "not found" errors when
-                    # Helm tries to poll readiness. We check pod state manually below.
-                    helm install gridsync-virginiadirty \
+                    # upgrade --install is idempotent: installs on first run, upgrades
+                    # on every subsequent run. "release already exists" is impossible.
+                    # No --wait: K3s API is under load from upstream stages; --wait
+                    # causes spurious "not found" errors on its readiness polls.
+                    helm upgrade --install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
                         --timeout 5m
 
-                    helm install gridsync-irelandmixed \
+                    helm upgrade --install gridsync-irelandmixed \
                         ./charts/gridsync-payload \
                         -n ireland-mixed \
                         --set replicaCount=0 \
                         --timeout 5m
 
-                    helm install gridsync-swedengreen \
+                    helm upgrade --install gridsync-swedengreen \
                         ./charts/gridsync-payload \
                         -n sweden-green \
                         --set replicaCount=0 \
                         --timeout 5m
 
-                    # Give K3s a moment to reconcile after the installs
+                    # Give K3s a moment to reconcile before hitting the API again
                     sleep 10
 
                     # Deploy or update the live demo app and restart to pick up new image
