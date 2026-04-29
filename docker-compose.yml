@@ -43,7 +43,7 @@ services:
       - ./regions.yaml:/app/regions.yaml:ro
     environment:
       - REGIONS_FILE: "/app/regions.yaml"
-      - KUBECONFIG=/app/kubeconfig
+      - KUBECONFIG: "/app/kubeconfig"
     depends_on:
       carbon-exporter:
         condition: service_healthy

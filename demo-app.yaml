@@ -18,9 +18,15 @@ spec:
       containers:
       - name: demo-app
         image: gridsync-demo-app:latest
-        imagePullPolicy: Never          # Image built locally on EC2
+        imagePullPolicy: Always          # Image built locally on EC2
         ports:
         - containerPort: 5000
+        readinessProbe:          # Give it a little more time to wake up
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
         env:
         - name: PORT
           value: "5000"
