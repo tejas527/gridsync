@@ -235,11 +235,13 @@ print(len(highs))
 
                     # Deploy or update the live demo app and restart to pick up new image
                     sudo k3s kubectl apply -f demo-app.yaml
-		    sleep 2
-                    sudo k3s kubectl rollout restart deployment/gridsync-demo-app -n virginia-dirty
-		    sleep 2
+		    echo "Forcing deployment update for build ${BUILD_NUMBER}..."
+            	    sudo k3s kubectl patch deployment gridsync-demo-app -n virginia-dirty \
+                    -p "{\\"spec\\": {\\"template\\": {\\"metadata\\": {\\"annotations\\": {\\"ci-build-id\\": \\"${BUILD_NUMBER}\\"}}}}}"
+
+            	    # Wait for completion
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
-                        -n virginia-dirty --timeout=120s || true
+                    -n virginia-dirty --timeout=120s || true
 
                     echo "Pod state after deploy:"
                     for NS in virginia-dirty ireland-mixed sweden-green; do
