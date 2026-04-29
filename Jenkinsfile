@@ -162,7 +162,7 @@ print(len(highs))
                         SAFE=$(echo $IMAGE | tr "-" "_")
                         echo "Scanning $IMAGE..."
 
-                        # First call downloads/refreshes the DB if needed
+                        # First call downloads/refreshes DB if needed
                         trivy image \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
@@ -211,10 +211,15 @@ print(len(highs))
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    # upgrade --install is idempotent: installs on first run, upgrades
-                    # on every subsequent run. "release already exists" is impossible.
-                    # No --wait: K3s API is under load from upstream stages; --wait
-                    # causes spurious "not found" errors on its readiness polls.
+                    # Uninstall any existing releases first — this clears stuck
+                    # "failed" or "pending-install" states that block upgrade --install.
+                    helm uninstall gridsync-virginiadirty -n virginia-dirty 2>/dev/null || true
+                    helm uninstall gridsync-irelandmixed  -n ireland-mixed  2>/dev/null || true
+                    helm uninstall gridsync-swedengreen   -n sweden-green   2>/dev/null || true
+
+                    # Wait for the uninstall deletions to propagate before reinstalling
+                    sleep 5
+
                     helm upgrade --install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
@@ -233,7 +238,7 @@ print(len(highs))
                         --set replicaCount=0 \
                         --timeout 5m
 
-                    # Give K3s a moment to reconcile before hitting the API again
+                    # Give K3s a moment to reconcile after the installs
                     sleep 10
 
                     # Deploy or update the live demo app and restart to pick up new image
