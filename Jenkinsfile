@@ -155,15 +155,9 @@ print(len(highs))
                     TRIVY_CACHE="/tmp/trivy-cache"
                     mkdir -p "$TRIVY_CACHE"
 
-                    # Remove any stale lock files left by a previously interrupted
-                    # Trivy process. Stale locks cause "cache in use" timeouts even
-                    # when no other process is actually running.
+                    # Remove any stale lock files left by a previously interrupted process
                     find "$TRIVY_CACHE" -name "*.lock" -delete 2>/dev/null || true
 
-                    # Let Trivy manage the DB lifecycle naturally: it checks the
-                    # cache, downloads only if the DB is missing or expired, then
-                    # scans. All three scans run sequentially so there is zero
-                    # concurrent lock contention.
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
                         SAFE=$(echo $IMAGE | tr "-" "_")
                         echo "Scanning $IMAGE..."
@@ -215,7 +209,7 @@ print(len(highs))
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    # Delete Helm release history secrets so installs are always fresh
+                    # Delete Helm release history so installs are always fresh
                     for NS in virginia-dirty ireland-mixed sweden-green; do
                         sudo k3s kubectl delete secret -n $NS \
                             -l "owner=helm" \
@@ -226,14 +220,15 @@ print(len(highs))
                             -n $NS --ignore-not-found 2>/dev/null || true
                     done
 
-                    # virginia-dirty: 3 replicas, wait for pods to be ready
+                    # No --wait on any install: the K3s API server is under heavy load
+                    # from upstream stages and returns spurious "not found" errors when
+                    # Helm tries to poll readiness. We check pod state manually below.
                     helm install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
-                        --wait --timeout 5m
+                        --timeout 5m
 
-                    # 0-replica installs — no pods to wait for, skip --wait
                     helm install gridsync-irelandmixed \
                         ./charts/gridsync-payload \
                         -n ireland-mixed \
@@ -245,6 +240,9 @@ print(len(highs))
                         -n sweden-green \
                         --set replicaCount=0 \
                         --timeout 5m
+
+                    # Give K3s a moment to reconcile after the installs
+                    sleep 10
 
                     # Deploy or update the live demo app and restart to pick up new image
                     sudo k3s kubectl apply -f demo-app.yaml
