@@ -235,7 +235,9 @@ print(len(highs))
 
                     # Deploy or update the live demo app and restart to pick up new image
                     sudo k3s kubectl apply -f demo-app.yaml
+		    sleep 2
                     sudo k3s kubectl rollout restart deployment/gridsync-demo-app -n virginia-dirty
+		    sleep 2
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
                         -n virginia-dirty --timeout=120s || true
 
