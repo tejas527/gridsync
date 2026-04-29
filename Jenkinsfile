@@ -211,34 +211,26 @@ print(len(highs))
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    # Uninstall any existing releases first — this clears stuck
-                    # "failed" or "pending-install" states that block upgrade --install.
-                    helm uninstall gridsync-virginiadirty -n virginia-dirty 2>/dev/null || true
-                    helm uninstall gridsync-irelandmixed  -n ireland-mixed  2>/dev/null || true
-                    helm uninstall gridsync-swedengreen   -n sweden-green   2>/dev/null || true
-
-                    # Wait for the uninstall deletions to propagate before reinstalling
-                    sleep 5
-
-                    helm upgrade --install gridsync-virginiadirty \
-                        ./charts/gridsync-payload \
+                    # Render Helm charts and apply with kubectl.
+                    # This uses Helm purely as a template engine — kubectl apply
+                    # is unconditionally idempotent and has no release state, so
+                    # "already exists" errors are impossible regardless of K3s state.
+                    helm template gridsync-virginiadirty ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
-                        --timeout 5m
+                        | sudo k3s kubectl apply -n virginia-dirty -f -
 
-                    helm upgrade --install gridsync-irelandmixed \
-                        ./charts/gridsync-payload \
+                    helm template gridsync-irelandmixed ./charts/gridsync-payload \
                         -n ireland-mixed \
                         --set replicaCount=0 \
-                        --timeout 5m
+                        | sudo k3s kubectl apply -n ireland-mixed -f -
 
-                    helm upgrade --install gridsync-swedengreen \
-                        ./charts/gridsync-payload \
+                    helm template gridsync-swedengreen ./charts/gridsync-payload \
                         -n sweden-green \
                         --set replicaCount=0 \
-                        --timeout 5m
+                        | sudo k3s kubectl apply -n sweden-green -f -
 
-                    # Give K3s a moment to reconcile after the installs
+                    # Give K3s a moment to reconcile after applying manifests
                     sleep 10
 
                     # Deploy or update the live demo app and restart to pick up new image
