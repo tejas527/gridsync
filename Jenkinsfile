@@ -155,11 +155,8 @@ print(len(highs))
                     TRIVY_CACHE="/tmp/trivy-cache"
                     mkdir -p "$TRIVY_CACHE"
 
-                    # Trivy uses OS-level flock() on trivy.db — there is no separate
-                    # .lock file to delete. A previous interrupted build may have left
-                    # an orphaned Trivy process still holding the lock. Kill any
-                    # lingering Trivy processes so the OS releases the flock before
-                    # we try to acquire it.
+                    # Kill any orphaned Trivy processes holding the OS-level flock
+                    # on trivy.db from a previously interrupted build.
                     sudo pkill -f "trivy" 2>/dev/null || true
                     sleep 2
 
@@ -234,11 +231,8 @@ print(len(highs))
                         --set replicaCount=0 \
                         | sudo k3s kubectl apply -n sweden-green -f -
 
-                    # K3s uses containerd as its container runtime, completely
-                    # separate from the Docker daemon. Images built with "docker build"
-                    # are invisible to K3s pods unless explicitly imported into
-                    # containerd. This one command is what makes the demo-app pod
-                    # actually start and allows DAST to reach :30080.
+                    # K3s uses containerd as its runtime — separate from Docker.
+                    # Import the demo-app image into containerd so the pod can start.
                     echo "Importing gridsync-demo-app into K3s containerd..."
                     docker save ${DEMO_APP_IMAGE}:latest \
                         | sudo k3s ctr images import -
@@ -246,12 +240,10 @@ print(len(highs))
 
                     sudo k3s kubectl apply -f demo-app.yaml
 
-                    # Patch with build number to force a fresh rollout every run.
-                    echo "Patching demo-app with build ${BUILD_NUMBER} to trigger rollout..."
-                    sudo k3s kubectl patch deployment gridsync-demo-app \
-                        -n virginia-dirty \
-                        -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"ci-build-id\":\"${BUILD_NUMBER}\"}}}}}"
-
+                    # kubectl apply showed "unchanged" so no rollout was triggered.
+                    # rollout restart is now safe — there is no double-tap collision.
+                    sudo k3s kubectl rollout restart deployment/gridsync-demo-app \
+                        -n virginia-dirty
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
                         -n virginia-dirty --timeout=120s || true
 
