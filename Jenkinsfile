@@ -127,25 +127,26 @@ print(len(highs))
             steps {
                 echo 'Building Docker images...'
                 sh '''
-                    docker build --no-cache \
-                                 -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
+                    # No --no-cache: Docker naturally busts the cache when file content
+                    # changes (COPY layers are re-run when the source file hash changes).
+                    # --no-cache re-downloads pip on every single build, causing CPU/RAM
+                    # pressure that starves the K3s API server during the Helm stage.
+                    docker build -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
                                  -t ${SCHEDULER_IMAGE}:latest \
                                  -f Dockerfile .
 
-                    docker build --no-cache \
-                                 -t ${EXPORTER_IMAGE}:${BUILD_NUMBER} \
+                    docker build -t ${EXPORTER_IMAGE}:${BUILD_NUMBER} \
                                  -t ${EXPORTER_IMAGE}:latest \
                                  -f Dockerfile.exporter .
 
-                    docker build --no-cache \
-                                 -t ${DEMO_APP_IMAGE}:${BUILD_NUMBER} \
+                    docker build -t ${DEMO_APP_IMAGE}:${BUILD_NUMBER} \
                                  -t ${DEMO_APP_IMAGE}:latest \
                                  -f Dockerfile.app .
 
                     echo "Built images:"
                     docker images | grep gridsync
 
-                    echo "Pruning old dangling images to reclaim disk space..."
+                    echo "Pruning dangling images to reclaim disk space..."
                     docker image prune -f || true
                 '''
             }
@@ -155,7 +156,10 @@ print(len(highs))
             steps {
                 echo 'Trivy: scanning all images...'
                 sh '''
-                    TRIVY_CACHE="/tmp/trivy-cache-${BUILD_NUMBER}"
+                    # Stable cache path — Trivy reuses the 91 MB vuln DB across builds
+                    # instead of re-downloading it every run (which was happening because
+                    # the old path was keyed to BUILD_NUMBER, creating a new dir each time).
+                    TRIVY_CACHE="/tmp/trivy-cache"
                     mkdir -p "$TRIVY_CACHE"
 
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
@@ -217,27 +221,30 @@ print(len(highs))
                             -n $NS --ignore-not-found 2>/dev/null || true
                     done
 
+                    # virginia-dirty: 3 replicas, wait for pods to be ready (5m timeout)
                     helm install gridsync-virginiadirty \
                         ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
-                        --wait --timeout 2m
+                        --wait --timeout 5m
 
+                    # ireland-mixed and sweden-green: 0 replicas — no pods to wait for,
+                    # so drop --wait to avoid burning time for nothing.
                     helm install gridsync-irelandmixed \
                         ./charts/gridsync-payload \
                         -n ireland-mixed \
                         --set replicaCount=0 \
-                        --wait --timeout 2m
+                        --timeout 5m
 
                     helm install gridsync-swedengreen \
                         ./charts/gridsync-payload \
                         -n sweden-green \
                         --set replicaCount=0 \
-                        --wait --timeout 2m
+                        --timeout 5m
 
                     # Deploy or update the live demo app and restart to pick up new image.
                     # rollout status has || true so a slow pod cycle on a busy instance
-                    # does not kill the pipeline — DAST sleep 30s below handles the wait.
+                    # does not kill the pipeline.
                     sudo k3s kubectl apply -f demo-app.yaml
                     sudo k3s kubectl rollout restart deployment/gridsync-demo-app -n virginia-dirty
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
