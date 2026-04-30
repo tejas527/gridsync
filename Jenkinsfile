@@ -157,6 +157,8 @@ print(len(highs))
                 sh '''
                     # Wipe cache every build — previous builds left root-owned trivy.db
                     # which jenkins user cannot flock(). Wipe and recreate fresh.
+		    sudo pkill -9 -f trivy 2>/dev/null || true
+		    sleep 1
                     sudo rm -rf /tmp/trivy-cache
                     mkdir -p /tmp/trivy-cache
                     TRIVY_CACHE="/tmp/trivy-cache"
