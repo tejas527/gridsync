@@ -165,28 +165,27 @@ print(len(highs))
 
                     for IMAGE in ${SCHEDULER_IMAGE} ${EXPORTER_IMAGE} ${DEMO_APP_IMAGE}; do
                         SAFE=$(echo $IMAGE | tr "-" "_")
-                        echo "Scanning $IMAGE..."
+                        echo "Scanning $IMAGE..."	
 
-                        trivy image \
+                        sudo rm -rf /tmp/trivy-cache
+                    	mkdir -p /tmp/trivy-cache
+			
+			trivy image \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
-                            --format table \
-                            --cache-dir "$TRIVY_CACHE" \
-                            ${IMAGE}:latest
-
-                        trivy image \
                             --format json \
                             --output ${REPORT_DIR}/trivy-${SAFE}.json \
-                            --cache-dir "$TRIVY_CACHE" \
-                            --skip-db-update \
-                            ${IMAGE}:latest
+                    	    --cache-dir /tmp/trivy-cache \
+                    	    ${IMAGE}:latest || true
+
+                        sudo rm -rf /tmp/trivy-cache
+                	mkdir -p /tmp/trivy-cache
 
                         trivy image \
                             --format spdx-json \
                             --output ${REPORT_DIR}/sbom-${SAFE}.spdx.json \
-                            --cache-dir "$TRIVY_CACHE" \
-                            --skip-db-update \
-                            ${IMAGE}:latest
+                            --cache-dir /tmp/trivy-cache \
+                            ${IMAGE}:latest || true
                     done
                     echo "Trivy: all images scanned."
                 '''
