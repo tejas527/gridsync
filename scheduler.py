@@ -13,29 +13,22 @@ DIRTY_REGION = "virginia-dirty"
 GREEN_REGION = "sweden-green"
 
 CARBON_PROFILES = {
-    "high":   (300, 500),   # Coal/Gas heavy grid
-    "medium": (100, 250),   # Mixed grid
-    "low":    (10,  50),    # Wind/Hydro/Nuclear
+    "high":   (300, 500),
+    "medium": (100, 250),
+    "low":    (10,  50),
 }
 
 
 def load_regions():
-    """Load region definitions from the YAML config file."""
     with open(REGIONS_FILE, "r") as f:
         config = yaml.safe_load(f)
     return config["regions"]
 
 
 def get_mock_carbon_intensity(region_name_or_profile):
-    """
-    Returns a mock carbon intensity for a region.
-    Accepts either a region name (e.g. 'virginia-dirty') or a profile key (e.g. 'high').
-    This keeps backward compatibility with unit tests.
-    """
     if region_name_or_profile in CARBON_PROFILES:
         low, high = CARBON_PROFILES[region_name_or_profile]
         return random.randint(low, high)
-
     try:
         regions = load_regions()
         for r in regions:
@@ -44,13 +37,10 @@ def get_mock_carbon_intensity(region_name_or_profile):
                 return random.randint(low, high)
     except Exception:
         pass
-
     return random.randint(100, 300)
 
 
 def scale_pods(namespace, replicas):
-    """Executes the Kubernetes command to scale the deployment."""
-    # No sudo — container runs as root; k3s binary is mounted from the host
     command = f"k3s kubectl scale deployment {APP_NAME} --replicas={replicas} -n {namespace}"
     try:
         subprocess.run(command, shell=True, check=True, stdout=subprocess.DEVNULL)
@@ -60,8 +50,6 @@ def scale_pods(namespace, replicas):
 
 
 def get_current_pods(namespace):
-    """Checks how many pods are currently running in a namespace."""
-    # No sudo — container runs as root; k3s binary is mounted from the host
     command = f"k3s kubectl get deployment {APP_NAME} -n {namespace} -o=jsonpath='{{{{.spec.replicas}}}}'"
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -71,8 +59,6 @@ def get_current_pods(namespace):
 
 
 def ensure_namespace(namespace):
-    """Creates a K8s namespace if it doesn't already exist."""
-    # No sudo — container runs as root; k3s binary is mounted from the host
     check = f"k3s kubectl get namespace {namespace}"
     create = f"k3s kubectl create namespace {namespace}"
     result = subprocess.run(check, shell=True, capture_output=True)
