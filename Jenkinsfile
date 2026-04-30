@@ -238,10 +238,18 @@ print(len(highs))
                         | sudo k3s ctr images import -
                     echo "Image imported successfully."
 
+                    # Force-delete any pods stuck in Terminating from previous failed
+                    # rollouts. Stuck pods hold resources and prevent new pods from
+                    # scheduling, causing the rollout to time out every build.
+                    echo "Clearing stuck demo-app pods from previous builds..."
+                    sudo k3s kubectl delete pods -n virginia-dirty \
+                        -l app=gridsync-demo \
+                        --grace-period=0 --force \
+                        --ignore-not-found 2>/dev/null || true
+                    sleep 5
+
                     sudo k3s kubectl apply -f demo-app.yaml
 
-                    # kubectl apply showed "unchanged" so no rollout was triggered.
-                    # rollout restart is now safe — there is no double-tap collision.
                     sudo k3s kubectl rollout restart deployment/gridsync-demo-app \
                         -n virginia-dirty
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
@@ -269,8 +277,11 @@ print(len(highs))
                     TARGET="http://${PUBLIC_IP}:30080"
                     mkdir -p ${REPORT_DIR}/zap
 
-                    echo "Waiting 30s for demo app pod to finish rolling..."
-                    sleep 30
+                    # 60s wait: rollout timeout is 120s so the pod may still be
+                    # starting when the Helm stage finishes. Extra wait ensures
+                    # the Flask app is fully up before ZAP tries to hit it.
+                    echo "Waiting 60s for demo app pod to finish rolling..."
+                    sleep 60
 
                     if curl -sf --max-time 10 "${TARGET}/health" > /dev/null 2>&1; then
                         echo "Target live: $TARGET"
