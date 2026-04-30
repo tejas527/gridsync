@@ -242,10 +242,11 @@ print(len(highs))
                     # name mismatch, no rollout timeout possible.
                     echo "Starting demo app as Docker container on port 30080..."
                     docker rm -f gridsync-demo-container 2>/dev/null || true
+		    sleep 3
                     docker run -d \
                         --name gridsync-demo-container \
                         --restart unless-stopped \
-                        -e PORT=5000 \
+                        -e PORT=30080 \
                         -e EXPORTER_URL=http://localhost:8000/metrics \
                         --network host \
                         ${DEMO_APP_IMAGE}:latest
