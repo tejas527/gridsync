@@ -244,7 +244,6 @@ print(len(highs))
                     docker run -d \
                         --name gridsync-demo-container \
                         --restart unless-stopped \
-                        -p 30080:5000 \
                         -e PORT=5000 \
                         -e EXPORTER_URL=http://localhost:8000/metrics \
                         --network host \
