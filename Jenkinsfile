@@ -152,14 +152,9 @@ print(len(highs))
             steps {
                 echo 'Trivy: scanning all images...'
                 sh '''
-                    # ROOT CAUSE OF ALL TRIVY LOCK ERRORS:
-                    # Previous builds ran trivy as root, so /tmp/trivy-cache and
-                    # trivy.db are owned by root. The jenkins user cannot acquire
-                    # an flock() on a root-owned file, so every scan times out
-                    # immediately trying to lock it. pkill only removes the process;
-                    # it does not fix ownership. The only reliable fix is to wipe
-                    # the cache completely at the start of every build and let trivy
-                    # recreate it fresh, owned by whoever is running this stage.
+                    # Wipe cache completely — previous builds ran trivy as root so
+                    # trivy.db is root-owned. The jenkins user cannot flock() a
+                    # root-owned file. Wiping and recreating ensures correct ownership.
                     sudo rm -rf /tmp/trivy-cache
                     mkdir -p /tmp/trivy-cache
                     TRIVY_CACHE="/tmp/trivy-cache"
@@ -168,7 +163,6 @@ print(len(highs))
                         SAFE=$(echo $IMAGE | tr "-" "_")
                         echo "Scanning $IMAGE..."
 
-                        # First call downloads the DB fresh (cache was just wiped)
                         trivy image \
                             --exit-code 0 \
                             --severity HIGH,CRITICAL \
@@ -176,7 +170,6 @@ print(len(highs))
                             --cache-dir "$TRIVY_CACHE" \
                             ${IMAGE}:latest
 
-                        # Subsequent calls reuse the DB downloaded above
                         trivy image \
                             --format json \
                             --output ${REPORT_DIR}/trivy-${SAFE}.json \
@@ -217,9 +210,6 @@ print(len(highs))
                             || sudo k3s kubectl create namespace $NS
                     done
 
-                    # Render Helm charts and apply with kubectl.
-                    # Uses Helm as a template engine only — kubectl apply is
-                    # unconditionally idempotent, no release state, no "already exists".
                     helm template gridsync-virginiadirty ./charts/gridsync-payload \
                         -n virginia-dirty \
                         --set replicaCount=3 \
@@ -235,35 +225,28 @@ print(len(highs))
                         --set replicaCount=0 \
                         | sudo k3s kubectl apply -n sweden-green -f -
 
-                    # ROOT CAUSE OF ALL DEMO-APP ROLLOUT TIMEOUTS:
-                    # "docker save | k3s ctr images import" stores the image in
-                    # containerd as "docker.io/library/gridsync-demo-app:latest".
-                    # But demo-app.yaml references it as "gridsync-demo-app:latest".
-                    # K3s cannot match these two strings, so every pod gets
-                    # ErrImageNeverPull, fails its readiness probe, the old pod
-                    # never terminates, and the rollout times out every build.
-                    # Fix: import the image, then set it explicitly using the full
-                    # docker.io/library/ prefix that containerd actually stored it under.
+                    # Import the demo-app image into K3s containerd.
+                    # containerd stores it as docker.io/library/gridsync-demo-app:latest.
+                    # demo-app.yaml now references that exact string so the pod starts.
                     echo "Importing gridsync-demo-app into K3s containerd..."
                     docker save ${DEMO_APP_IMAGE}:latest \
                         | sudo k3s ctr images import -
                     echo "Image imported successfully."
 
                     # Force-delete any pods stuck in Terminating from previous builds
+                    # so they don't hold resources that prevent the new pod scheduling.
                     sudo k3s kubectl delete pods -n virginia-dirty \
                         -l app=gridsync-demo \
                         --grace-period=0 --force \
                         --ignore-not-found 2>/dev/null || true
                     sleep 5
 
+                    # Apply the deployment. demo-app.yaml uses docker.io/library/ prefix
+                    # which matches exactly what containerd stored — pod starts cleanly.
                     sudo k3s kubectl apply -f demo-app.yaml
 
-                    # Set the image to the exact reference containerd stored it under.
-                    # This is what actually makes the pod start successfully.
-                    sudo k3s kubectl set image deployment/gridsync-demo-app \
-                        demo-app=docker.io/library/${DEMO_APP_IMAGE}:latest \
-                        -n virginia-dirty
-
+                    # Wait for the pod to come up. Non-fatal so pipeline continues even
+                    # on slow starts; DAST has an additional 60s wait below.
                     sudo k3s kubectl rollout status deployment/gridsync-demo-app \
                         -n virginia-dirty --timeout=120s || true
 
@@ -289,7 +272,7 @@ print(len(highs))
                     TARGET="http://${PUBLIC_IP}:30080"
                     mkdir -p ${REPORT_DIR}/zap
 
-                    echo "Waiting 60s for demo app pod to finish rolling..."
+                    echo "Waiting 60s for demo app pod to become ready..."
                     sleep 60
 
                     if curl -sf --max-time 10 "${TARGET}/health" > /dev/null 2>&1; then

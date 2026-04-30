@@ -17,16 +17,15 @@ spec:
     spec:
       containers:
       - name: demo-app
-        image: gridsync-demo-app:latest
-        imagePullPolicy: Always          # Image built locally on EC2
+        # Must use the fully-qualified docker.io/library/ prefix.
+        # When "docker save | k3s ctr images import" stores an image,
+        # containerd records it as docker.io/library/<name>:<tag>.
+        # Using the short name "gridsync-demo-app:latest" here causes
+        # ErrImageNeverPull because K3s cannot match it to the stored ref.
+        image: docker.io/library/gridsync-demo-app:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 5000
-        readinessProbe:          # Give it a little more time to wake up
-          httpGet:
-            path: /health
-            port: 5000
-          initialDelaySeconds: 5
-          periodSeconds: 10
         env:
         - name: PORT
           value: "5000"
@@ -54,4 +53,4 @@ spec:
   - protocol: TCP
     port: 5000
     targetPort: 5000
-    nodePort: 30080        # http://EC2_IP:30080 — the live demo URL
+    nodePort: 30080
