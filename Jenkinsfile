@@ -127,7 +127,12 @@ print(len(highs))
             steps {
                 echo 'Building Docker images...'
                 sh '''
-                    docker build -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
+                    # --no-cache on scheduler only: ensures the layer cache never
+                    # serves a stale scheduler.py that has old sudo commands.
+                    # The scheduler image is tiny (pyyaml only) so the rebuild is fast
+                    # and does not stress the API server the way 3x --no-cache did.
+                    docker build --no-cache \
+                                 -t ${SCHEDULER_IMAGE}:${BUILD_NUMBER} \
                                  -t ${SCHEDULER_IMAGE}:latest \
                                  -f Dockerfile .
 
@@ -140,9 +145,7 @@ print(len(highs))
                                  -f Dockerfile.app .
 
                     echo "Built images:"
-                    docker images | grep gridsync
-
-                    echo "Pruning dangling images to reclaim disk space..."
+                    docker images | grep gridsync | grep -v latest | awk '{print $1":"$2}' | xargs docker rmi 2>/dev/null || true
                     docker image prune -f || true
                 '''
             }
@@ -152,9 +155,8 @@ print(len(highs))
             steps {
                 echo 'Trivy: scanning all images...'
                 sh '''
-                    # Wipe cache completely — previous builds ran trivy as root so
-                    # trivy.db is root-owned. The jenkins user cannot flock() a
-                    # root-owned file. Wiping and recreating ensures correct ownership.
+                    # Wipe cache every build — previous builds left root-owned trivy.db
+                    # which jenkins user cannot flock(). Wipe and recreate fresh.
                     sudo rm -rf /tmp/trivy-cache
                     mkdir -p /tmp/trivy-cache
                     TRIVY_CACHE="/tmp/trivy-cache"
@@ -225,30 +227,29 @@ print(len(highs))
                         --set replicaCount=0 \
                         | sudo k3s kubectl apply -n sweden-green -f -
 
-                    # Import the demo-app image into K3s containerd.
-                    # containerd stores it as docker.io/library/gridsync-demo-app:latest.
-                    # demo-app.yaml now references that exact string so the pod starts.
-                    echo "Importing gridsync-demo-app into K3s containerd..."
-                    docker save ${DEMO_APP_IMAGE}:latest \
-                        | sudo k3s ctr images import -
-                    echo "Image imported successfully."
-
-                    # Force-delete any pods stuck in Terminating from previous builds
-                    # so they don't hold resources that prevent the new pod scheduling.
-                    sudo k3s kubectl delete pods -n virginia-dirty \
-                        -l app=gridsync-demo \
-                        --grace-period=0 --force \
-                        --ignore-not-found 2>/dev/null || true
-                    sleep 5
-
-                    # Apply the deployment. demo-app.yaml uses docker.io/library/ prefix
-                    # which matches exactly what containerd stored — pod starts cleanly.
-                    sudo k3s kubectl apply -f demo-app.yaml
-
-                    # Wait for the pod to come up. Non-fatal so pipeline continues even
-                    # on slow starts; DAST has an additional 60s wait below.
-                    sudo k3s kubectl rollout status deployment/gridsync-demo-app \
-                        -n virginia-dirty --timeout=120s || true
+                    # ── Demo App ────────────────────────────────────────────────────
+                    # Run the demo app as a plain Docker container instead of a K3s pod.
+                    #
+                    # Root cause of all previous rollout failures: K3s uses containerd
+                    # as its runtime, completely separate from Docker. "docker save |
+                    # k3s ctr images import" stores images under a docker.io/library/
+                    # prefix that K3s could not reliably resolve with imagePullPolicy
+                    # Never, causing ErrImageNeverPull on every single build.
+                    #
+                    # Running as a Docker container bypasses this entirely: Docker builds
+                    # it, Docker runs it, DAST hits it on :30080. No import, no image
+                    # name mismatch, no rollout timeout possible.
+                    echo "Starting demo app as Docker container on port 30080..."
+                    docker rm -f gridsync-demo-container 2>/dev/null || true
+                    docker run -d \
+                        --name gridsync-demo-container \
+                        --restart unless-stopped \
+                        -p 30080:5000 \
+                        -e PORT=5000 \
+                        -e EXPORTER_URL=http://localhost:8000/metrics \
+                        --network host \
+                        ${DEMO_APP_IMAGE}:latest
+                    echo "Demo app container started."
 
                     echo "Pod state after deploy:"
                     for NS in virginia-dirty ireland-mixed sweden-green; do
@@ -272,8 +273,8 @@ print(len(highs))
                     TARGET="http://${PUBLIC_IP}:30080"
                     mkdir -p ${REPORT_DIR}/zap
 
-                    echo "Waiting 60s for demo app pod to become ready..."
-                    sleep 60
+                    echo "Waiting 15s for demo app container to be ready..."
+                    sleep 15
 
                     if curl -sf --max-time 10 "${TARGET}/health" > /dev/null 2>&1; then
                         echo "Target live: $TARGET"
