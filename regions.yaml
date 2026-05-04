@@ -8,8 +8,8 @@
 regions:
   - name: virginia-dirty
     display: "Virginia (US-East)"
-    namespace: virginia-dirty
-    carbon_profile: high
+    namespace: virginia-green
+    carbon_profile: low
  
   - name: ireland-mixed
     display: "Ireland (EU-West)"
@@ -18,6 +18,6 @@ regions:
  
   - name: sweden-green
     display: "Sweden (EU-North)"
-    namespace: sweden-green
-    carbon_profile: low
+    namespace: sweden-dirty
+    carbon_profile: high
  
