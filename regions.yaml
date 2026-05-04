@@ -13,7 +13,7 @@ regions:
  
   - name: ireland-mixed
     display: "Ireland (EU-West)"
-    namespace: ireland-mixed
+    namespace: ireland-mix
     carbon_profile: medium
  
   - name: sweden-green
